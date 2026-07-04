@@ -1,0 +1,47 @@
+{
+  "metadata": {
+    "version": "1.0.0-SNAPSHOT",
+    "addon": "Jsonic"
+  },
+  "types": [
+    {
+      "id": "json",
+      "name": "json",
+      "since": ["1.0"]
+    },
+    {
+      "id": "jsonbuilder",
+      "name": "json builder",
+      "since": ["1.0"]
+    },
+    {
+      "id": "request",
+      "name": "request",
+      "since": ["1.0"]
+    },
+    {
+      "id": "response",
+      "name": "response",
+      "since": ["1.0"]
+    },
+    {
+      "id": "jsonicserver",
+      "name": "jsonic server",
+      "since": ["1.0"]
+    }
+  ],
+  "events": [
+    {
+      "id": "http_response",
+      "name": "Http response received",
+      "patterns": ["[on] [jsonic] received [http] response", "[on] [jsonic] http response received"],
+      "since": ["1.0"]
+    },
+    {
+      "id": "ws_message",
+      "name": "WebSocket message",
+      "patterns": ["[on] [jsonic] ws message", "[on] websocket message"],
+      "since": ["1.0"]
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "users": {
+    "admin": {
+      "pass": "admin123",
+      "name": "Administrátor",
+      "email": "admin@jsonic.local",
+      "role": "admin"
+    }
+  },
+  "userIds": ["admin"],
+  "tokens": {},
+  "homes": {},
+  "homeIds": [],
+  "players": {},
+  "playerIds": [],
+  "activity": [],
+  "cmdlog": []
+}

@@ -25,7 +25,20 @@ It provides modern and reliable tools for working with web requests, JSON, socke
 
 ---
 ## 🔔 Project Status
-Jsonic is currently in development and will be released in the coming weeks/months.  
-It is the official successor of **SkJson**, which is no longer maintained.  
 
-Stay tuned for more updates and release announcements! 🚀
+Jsonic **1.0.0-SNAPSHOT** — greenfield addon s Fluent API (Kotlin core + Skript Sections).
+
+### Moduly
+- `jsonic-core` — JSON engine, HTTP client, storage
+- `jsonic-server` — embedded Ktor web server (Hono-style)
+- `jsonic-skript` — Skript syntaxe (vlastní syntaxe začínající na `jsonic …`, `json cache`, …)
+- `jsonic-bukkit` — plugin → `jsonic.jar`
+
+### Build
+```bash
+cd Jsonic && ./gradlew shadowJar
+```
+
+Výstup: `jsonic-bukkit/build/libs/jsonic.jar`
+
+Migrace ze SkJson: viz [MIGRATION.md](MIGRATION.md)

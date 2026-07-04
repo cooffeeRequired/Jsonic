@@ -1,0 +1,25 @@
+name: Jsonic
+version: '1.0.0-SNAPSHOT'
+main: cz.coffeerequired.jsonic.JsonicPlugin
+api-version: '1.21'
+revision-version: '527d2c1f'
+depend:
+  - Skript
+prefix: Jsonic
+author: CoffeeRequired
+description: '&aBlazing fast JSON, HTTP, WebSocket, and storage for Skript'
+website: 'https://github.com/SkJsonTeam/Jsonic'
+loadbefore:
+  - skript-reflect
+  - SkBee
+commands:
+  jsonic:
+    description: Jsonic addon commands
+    usage: /jsonic
+permissions:
+  jsonic.use:
+    default: op
+    description: Allows use of Jsonic
+  jsonic.test:
+    default: op
+    description: Allows /jsonic fulltest

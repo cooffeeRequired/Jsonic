@@ -1,0 +1,353 @@
+# Jsonic Admin — utils (JSON persistence + domovy)
+#
+# Načítá se spolu se server.sk ze složky jsonic/
+# Data: ~jsonic/web/data.jsonc  (viz web/data.jsonc)
+#
+# Jsonic syntaxe používané zde:
+#   EffBindStorage      — bind json file … as …
+#   ExprStorageJson     — json cache "id"
+#   EffSaveJsonFile     — save … to json file …
+#   ExprJsonPath        — path "x" of {_json}
+#   EffSetJsonPathInJson — set path "x" in {_json} to …
+#   EffRemoveJsonPath   — remove path "x" from {_json}
+#   ExprJsonBuilder     — jsonic builder
+#   EffSetJsonPath      — set {_b}'s path "x" to …
+#   ExprBuildJson       — build json from {_b}
+#   ExprBearerToken     — bearer token  (server.sk)
+
+options:
+    web-db: ~jsonic/web/data.jsonc
+    web-cache: webdb
+
+# ======================== STORAGE ========================
+
+# Vrací navázaný JSON z cache (ExprStorageJson).
+function webDb() :: jsonelement:
+    return json cache {@web-cache}
+
+# EffBindStorage — jednorázové načtení souboru do cache při startu / joinu.
+function webDbLoad():
+    if json cache {@web-cache} exists:
+        stop
+    bind json file {@web-db} as {@web-cache}
+
+# EffSaveJsonFile — persist in-memory stavu na disk.
+function webDbSave():
+    save webDb() to json file {@web-db}
+
+# Zkratka: set path + save.
+function webDbSet(path: text, value: object):
+    set path {_path} in webDb() to value
+    webDbSave()
+
+# ExprJsonPath — čtení jedné cesty.
+function webDbGet(path: text) :: object:
+    return path {_path} of webDb()
+
+# Počet prvků v JSON poli (homeIds, playerIds, activity, …).
+# Skript neumí loop přes JSON klíče — držíme paralelní *Ids[] pole.
+function webCountIndexed(pathPrefix: text) :: number:
+    set {_n} to 0
+    loop 10000 times:
+        if path "%{_pathPrefix}%.%loop-number - 1%" of webDb() is not set:
+            stop loop
+        add 1 to {_n}
+    return {_n}
+
+# EffRemoveJsonPath — ořez pole od začátku (activity, cmdlog).
+function webTrimArray(pathPrefix: text, max: number):
+    set {_size} to webCountIndexed({_pathPrefix})
+    while {_size} > {_max}:
+        remove path "%{_pathPrefix}%.0" from webDb()
+        subtract 1 from {_size}
+    webDbSave()
+
+# ======================== LOG ========================
+
+function webAddActivity(msg: text):
+    set {_b} to jsonic builder
+    set {_b}'s path "text" to {_msg}
+    set {_b}'s path "time" to "now"
+    # path s [] = append do pole (PathEngine LIST_INIT)
+    set path "activity[]" in webDb() to build json from {_b}
+    webTrimArray("activity", 12)
+
+function webAddCmdLog(user: text, cmd: text):
+    set {_b} to jsonic builder
+    set {_b}'s path "user" to {_user}
+    set {_b}'s path "cmd" to {_cmd}
+    set {_b}'s path "time" to "now"
+    set path "cmdlog[]" in webDb() to build json from {_b}
+    webTrimArray("cmdlog", 40)
+
+# ======================== AUTH ========================
+
+function webIsStaff(user: text) :: boolean:
+    set {_role} to path "users.%{_user}%.role" of webDb()
+    if {_role} is "admin":
+        return true
+    if {_role} is "moderator":
+        return true
+    return false
+
+# ExprBearerToken + path tokens.{uuid}.user
+function webResolveUser() :: text:
+    set {_token} to bearer token
+    if {_token} is not set:
+        return ""
+    set {_user} to path "tokens.%{_token}%.user" of webDb()
+    if {_user} is not set:
+        return ""
+    return {_user}
+
+function webUserCount() :: number:
+    return webCountIndexed("userIds")
+
+function webHomeCount() :: number:
+    return webCountIndexed("homeIds")
+
+# ======================== HRÁČI ========================
+
+# Zapisuje / aktualizuje hráče při joinu (bez fake dat — jen reální join).
+function webTrackPlayer(p: player):
+    set {_name} to name of {_p}
+    set {_uuid} to "%uuid of {_p}%"
+    if path "players.%{_name}%.uuid" of webDb() is not set:
+        set path "playerIds[]" in webDb() to {_name}
+    set path "players.%{_name}%.uuid" in webDb() to {_uuid}
+    set path "players.%{_name}%.lastSeen" in webDb() to "nyní"
+    if path "players.%{_name}%.playtime" of webDb() is not set:
+        set path "players.%{_name}%.playtime" in webDb() to 0
+    if path "players.%{_name}%.role" of webDb() is not set:
+        set path "players.%{_name}%.role" in webDb() to "viewer"
+    webDbSave()
+
+# ======================== DOMOVY ========================
+
+# Vytvoří domov v JSON — voláno z /sethome, POST /api/homes a panelu.
+function webCreateHome(id: text, name: text, owner: text, world: text, x: number, y: number, z: number, isPublic: boolean) :: boolean:
+    if {_id} is "":
+        return false
+    if path "homes.%{_id}%.name" of webDb() is set:
+        return false
+    set {_b} to jsonic builder
+    set {_b}'s path "name" to {_name}
+    set {_b}'s path "owner" to {_owner}
+    set {_b}'s path "world" to {_world}
+    set {_b}'s path "x" to {_x}
+    set {_b}'s path "y" to {_y}
+    set {_b}'s path "z" to {_z}
+    if {_isPublic} is true:
+        set {_b}'s path "public" to true
+    else:
+        set {_b}'s path "public" to false
+    set path "homes.%{_id}%" in webDb() to build json from {_b}
+    set path "homeIds[]" in webDb() to {_id}
+    webDbSave()
+    return true
+
+function webDeleteHome(id: text) :: boolean:
+    if path "homes.%{_id}%.name" of webDb() is not set:
+        return false
+    remove path "homes.%{_id}%" from webDb()
+    set {_i} to 0
+    loop 10000 times:
+        set {_v} to path "homeIds.%{_i}%" of webDb()
+        if {_v} is not set:
+            stop loop
+        if {_v} is {_id}:
+            remove path "homeIds.%{_i}%" from webDb()
+            stop loop
+        add 1 to {_i}
+    webDbSave()
+    return true
+
+# Název → ID (malá písmena, mezery → _)
+function webHomeIdFromName(name: text) :: text:
+    set {_s} to lowercase {_name}
+    replace all " " with "_" in {_s}
+    return {_s}
+
+# ======================== API — JSON FRAGMENTY ========================
+# server.sk volá tyto funkce a vkládá výsledek do reply json "…"
+
+function webJsonActivity() :: text:
+    set {_json} to "["
+    set {_first} to true
+    set {_i} to 0
+    loop 100 times:
+        set {_txt} to path "activity.%{_i}%.text" of webDb()
+        if {_txt} is not set:
+            stop loop
+        set {_time} to path "activity.%{_i}%.time" of webDb()
+        if {_first} is true:
+            set {_first} to false
+        else:
+            set {_json} to "%{_json}%,"
+        set {_json} to "%{_json}%{""text"":""%{_txt}%"",""time"":""%{_time}%""}"
+        add 1 to {_i}
+    return "%{_json}%]"
+
+function webJsonCmdHistory() :: text:
+    set {_json} to "["
+    set {_first} to true
+    set {_i} to 0
+    loop 100 times:
+        set {_u} to path "cmdlog.%{_i}%.user" of webDb()
+        if {_u} is not set:
+            stop loop
+        set {_c} to path "cmdlog.%{_i}%.cmd" of webDb()
+        set {_t} to path "cmdlog.%{_i}%.time" of webDb()
+        if {_first} is true:
+            set {_first} to false
+        else:
+            set {_json} to "%{_json}%,"
+        set {_json} to "%{_json}%{""user"":""%{_u}%"",""cmd"":""%{_c}%"",""time"":""%{_t}%""}"
+        add 1 to {_i}
+    return "%{_json}%]"
+
+function webJsonHomes() :: text:
+    set {_json} to "["
+    set {_first} to true
+    set {_i} to 0
+    loop 1000 times:
+        set {_id} to path "homeIds.%{_i}%" of webDb()
+        if {_id} is not set:
+            stop loop
+        set {_name} to path "homes.%{_id}%.name" of webDb()
+        set {_owner} to path "homes.%{_id}%.owner" of webDb()
+        set {_world} to path "homes.%{_id}%.world" of webDb()
+        set {_x} to path "homes.%{_id}%.x" of webDb()
+        set {_y} to path "homes.%{_id}%.y" of webDb()
+        set {_z} to path "homes.%{_id}%.z" of webDb()
+        set {_pub} to path "homes.%{_id}%.public" of webDb()
+        if {_first} is true:
+            set {_first} to false
+        else:
+            set {_json} to "%{_json}%,"
+        if {_pub} is true:
+            set {_json} to "%{_json}%{""id"":""%{_id}%"",""name"":""%{_name}%"",""owner"":""%{_owner}%"",""world"":""%{_world}%"",""x"":%{_x}%,""y"":%{_y}%,""z"":%{_z}%,""public"":true}"
+        else:
+            set {_json} to "%{_json}%{""id"":""%{_id}%"",""name"":""%{_name}%"",""owner"":""%{_owner}%"",""world"":""%{_world}%"",""x"":%{_x}%,""y"":%{_y}%,""z"":%{_z}%,""public"":false}"
+        add 1 to {_i}
+    return "%{_json}%]"
+
+function webJsonPlayers() :: text:
+    set {_json} to "["
+    set {_first} to true
+    set {_i} to 0
+    loop 1000 times:
+        set {_p} to path "playerIds.%{_i}%" of webDb()
+        if {_p} is not set:
+            stop loop
+        set {_uuid} to path "players.%{_p}%.uuid" of webDb()
+        set {_pt} to path "players.%{_p}%.playtime" of webDb()
+        set {_ls} to path "players.%{_p}%.lastSeen" of webDb()
+        set {_role} to path "players.%{_p}%.role" of webDb()
+        set {_online} to false
+        loop all players:
+            if loop-player is {_p}:
+                set {_online} to true
+        if {_first} is true:
+            set {_first} to false
+        else:
+            set {_json} to "%{_json}%,"
+        if {_online} is true:
+            set {_json} to "%{_json}%{""name"":""%{_p}%"",""uuid"":""%{_uuid}%"",""playtime"":%{_pt}%,""lastSeen"":""nyní"",""role"":""%{_role}%"",""online"":true}"
+        else:
+            set {_json} to "%{_json}%{""name"":""%{_p}%"",""uuid"":""%{_uuid}%"",""playtime"":%{_pt}%,""lastSeen"":""%{_ls}%"",""role"":""%{_role}%"",""online"":false}"
+        add 1 to {_i}
+    return "%{_json}%]"
+
+# Světy z běžícího serveru (ne hardcoded fake seznam).
+function webJsonWorlds() :: text:
+    set {_b} to jsonic builder
+    set {_i} to 0
+    loop all worlds:
+        set {_b}'s path "%{_i}%" to name of loop-world
+        add 1 to {_i}
+    set {_json} to build json from {_b}
+    return "%{_json}%"
+
+# Markery pro mapu v panelu — online hráči + uložené domovy.
+function webJsonMapMarkers() :: text:
+    set {_json} to "["
+    set {_first} to true
+    loop all players:
+        set {_w} to name of world of loop-player
+        set {_x} to x-coordinate of loop-player
+        set {_y} to y-coordinate of loop-player
+        set {_z} to z-coordinate of loop-player
+        if {_first} is true:
+            set {_first} to false
+        else:
+            set {_json} to "%{_json}%,"
+        set {_json} to "%{_json}%{""type"":""player"",""id"":""%loop-player%"",""label"":""%loop-player%"",""world"":""%{_w}%"",""x"":%{_x}%,""y"":%{_y}%,""z"":%{_z}%}"
+    set {_i} to 0
+    loop 1000 times:
+        set {_id} to path "homeIds.%{_i}%" of webDb()
+        if {_id} is not set:
+            stop loop
+        set {_name} to path "homes.%{_id}%.name" of webDb()
+        set {_w} to path "homes.%{_id}%.world" of webDb()
+        set {_x} to path "homes.%{_id}%.x" of webDb()
+        set {_y} to path "homes.%{_id}%.y" of webDb()
+        set {_z} to path "homes.%{_id}%.z" of webDb()
+        set {_owner} to path "homes.%{_id}%.owner" of webDb()
+        if {_first} is true:
+            set {_first} to false
+        else:
+            set {_json} to "%{_json}%,"
+        set {_json} to "%{_json}%{""type"":""home"",""id"":""%{_id}%"",""label"":""%{_name}%"",""world"":""%{_w}%"",""x"":%{_x}%,""y"":%{_y}%,""z"":%{_z}%,""owner"":""%{_owner}%""}"
+        add 1 to {_i}
+    return "%{_json}%]"
+
+# ======================== PŘÍKAZY (domovy ve hře) ========================
+
+command /sethome [<text>]:
+    trigger:
+        set {_label} to arg-1
+        if {_label} is not set:
+            set {_label} to "domov"
+        set {_id} to webHomeIdFromName({_label})
+        set {_w} to name of world of player
+        set {_x} to x-coordinate of player
+        set {_y} to y-coordinate of player
+        set {_z} to z-coordinate of player
+        if webCreateHome({_id}, {_label}, name of player, {_w}, {_x}, {_y}, {_z}, false) is true:
+            send "&aDomov &f%{_label}% &auložen (&7%{_x}%, %{_y}%, %{_z}%&7)."
+            webAddActivity("Domov vytvořen: %{_id}% (%name of player%)")
+        else:
+            send "&cDomov s tímto názvem už existuje."
+
+command /delhome [<text>]:
+    trigger:
+        set {_label} to arg-1
+        if {_label} is not set:
+            send "&ePoužití: /delhome <název>"
+            stop
+        set {_id} to webHomeIdFromName({_label})
+        set {_owner} to path "homes.%{_id}%.owner" of webDb()
+        if {_owner} is not set:
+            send "&cDomov neexistuje."
+            stop
+        if {_owner} is not name of player:
+            if webIsStaff(name of player) is false:
+                send "&cTento domov ti nepatří."
+                stop
+        if webDeleteHome({_id}) is true:
+            send "&aDomov smazán."
+            webAddActivity("Domov smazán: %{_id}% (%name of player%)")
+        else:
+            send "&cNepodařilo se smazat."
+
+# ======================== EVENTY ========================
+
+on join:
+    webDbLoad()
+    webTrackPlayer(player)
+
+on quit:
+    webDbLoad()
+    set path "players.%name of player%.lastSeen" in webDb() to "now"
+    webDbSave()

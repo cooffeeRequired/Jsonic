@@ -1,0 +1,9 @@
+version: 1.0.0-SNAPSHOT
+
+types:
+	jsonelement: json element/elements
+	json: json element/elements
+	jsonbuilder: json builder/builders
+	jsonicrequest: jsonic request/requests
+	jsonicresponse: jsonic response/responses
+	jsonicserver: jsonic server/servers

@@ -1,0 +1,65 @@
+# === Skript's variable storage ===
+# Please do not modify this file manually!
+#
+# version: 2.15.4
+
+jc::fail::8adbf3e3-c671-417f-85ef-606d522e36d2, long, 0000000000000001
+jc::failures::8adbf3e3-c671-417f-85ef-606d522e36d2::1, string, 801A474554207B5F75726C7D20E286922073746174757320636F6465
+jc::last::8adbf3e3-c671-417f-85ef-606d522e36d2::fail, long, 0000000000000000
+jc::last::8adbf3e3-c671-417f-85ef-606d522e36d2::label, string, 800B736572766572726F757465
+jc::last::8adbf3e3-c671-417f-85ef-606d522e36d2::pass, long, 0000000000000000
+jc::log::8adbf3e3-c671-417f-85ef-606d522e36d2::1, string, 80B33C677265656E3EE29C93206A736F6E696320474554207265717565737420746F2022687474703A2F2F3132372E302E302E313A31383130322F636C69656E742D64656D6F3F713D6775692669643D393922203C6461726B5F677261793EE28692203C77686974653E6A736F6E696320726571756573742047455420687474703A2F2F3132372E302E302E313A31383130322F636C69656E742D64656D6F3F713D6775692669643D39392028554E4B4E4F574E29
+jc::log::8adbf3e3-c671-417f-85ef-606d522e36d2::2, string, 80603C7265643EE29C9720474554207B5F75726C7D20E286922073746174757320636F6465203C6461726B5F677261793EE28692203C77686974653E28756E73657429203C6461726B5F677261793E286FC48D656BC3A176C3A16E6F3A2032303029
+jc::pass::8adbf3e3-c671-417f-85ef-606d522e36d2, long, 0000000000000001
+srv::users::coffee::name, string, 8006436F66666565
+srv::users::coffee::role, string, 800561646D696E
+srv::users::guest::name, string, 80054775657374
+srv::users::guest::role, string, 8006766965776572
+web::activity::1, string, 800A3C6E6F6E653E7C6E6F77
+web::activity::2, string, 800A3C6E6F6E653E7C6E6F77
+web::homelist::1, string, 800A686F6D655F737061776E
+web::homelist::2, string, 8009686F6D655F6661726D
+web::homelist::3, string, 800B686F6D655F6E6574686572
+web::homes::home_farm::name, string, 80115A656C656E696E6F76C3A1206661726D61
+web::homes::home_farm::owner, string, 80055374657665
+web::homes::home_farm::public, boolean, 00
+web::homes::home_farm::world, string, 8005776F726C64
+web::homes::home_farm::x, long, 0000000000000080
+web::homes::home_farm::y, long, 0000000000000048
+web::homes::home_farm::z, long, FFFFFFFFFFFFFFC0
+web::homes::home_nether::name, string, 800E4E657468657220706F7274C3A16C
+web::homes::home_nether::owner, string, 8004416C6578
+web::homes::home_nether::public, boolean, 00
+web::homes::home_nether::world, string, 800C776F726C645F6E6574686572
+web::homes::home_nether::x, long, 000000000000002A
+web::homes::home_nether::y, long, 0000000000000050
+web::homes::home_nether::z, long, FFFFFFFFFFFFFF88
+web::homes::home_spawn::name, string, 800A537061776E2042617365
+web::homes::home_spawn::owner, string, 800561646D696E
+web::homes::home_spawn::public, boolean, 01
+web::homes::home_spawn::world, string, 8005776F726C64
+web::homes::home_spawn::x, long, 0000000000000000
+web::homes::home_spawn::y, long, 0000000000000040
+web::homes::home_spawn::z, long, 0000000000000000
+web::playerlist::1, string, 80055374657665
+web::playerlist::2, string, 8004416C6578
+web::players::alex::lastseen, string, 8010323032362D30372D30342030393A3135
+web::players::alex::playtime, long, 00000000000003C0
+web::players::alex::role, string, 8006766965776572
+web::players::alex::uuid, string, 800E64656D6F2D757569642D616C6578
+web::players::steve::lastseen, string, 8010323032362D30372D30332031383A3432
+web::players::steve::playtime, long, 0000000000000B18
+web::players::steve::role, string, 8006766965776572
+web::players::steve::uuid, string, 800F64656D6F2D757569642D7374657665
+web::tokens::8afa5ddf-6855-4e54-846c-c2b4581af810::user, string, 800561646D696E
+web::userlist::1, string, 800561646D696E
+web::userlist::2, string, 80096D6F64657261746F72
+web::users::admin::email, string, 801261646D696E406A736F6E69632E6C6F63616C
+web::users::admin::name, string, 800E41646D696E69737472C3A1746F72
+web::users::admin::pass, string, 800861646D696E313233
+web::users::admin::role, string, 800561646D696E
+web::users::moderator::email, string, 80106D6F64406A736F6E69632E6C6F63616C
+web::users::moderator::name, string, 800A4D6F646572C3A1746F72
+web::users::moderator::pass, string, 80066D6F64313233
+web::users::moderator::role, string, 80096D6F64657261746F72
+

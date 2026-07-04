@@ -1,0 +1,405 @@
+# Jsonic Admin — embedded HTTP server + web panel
+#
+# /jsonicserver start | stop | routes | test [název]
+# Domovy ve hře: /sethome [název] · /delhome <název>  (_utils.sk)
+# Data: ~jsonic/web/data.jsonc  (_utils.sk — EffBindStorage)
+# Panel: http://127.0.0.1:{@port}/
+#
+# Jsonic syntaxe v tomto souboru:
+#   StructDefineMiddleware  — define middleware "name":
+#   SecJsonicServer         — jsonic server on port …:
+#   SecRouteGroup           — group "/api":
+#   SecRouteGet             — get/post/delete "/path":
+#   EffApplyMiddleware      — middleware "auth"
+#   EffMiddlewareContinue   — continue/stop middleware
+#   EffReplyJson            — reply json … · reply with status …
+#   EffReplyFile            — reply file …
+#   EffServeFiles           — serve files from … at …
+#   SecJsonicError          — error "404":
+#   EffStartServer          — start jsonic server
+#   EffStopServer           — stop jsonic server
+#   ExprRouteParam          — route param "id" · request param "x"
+#   ExprBearerToken         — bearer token
+
+options:
+    port: 18102
+
+# ======================== MIDDLEWARE ========================
+# StructDefineMiddleware — sdílené řetězce pro SecRouteGroup / SecInlineMiddleware
+
+# Vyžaduje platný Bearer token (utils.webResolveUser).
+define middleware "requireAuth":
+    set {_user} to webResolveUser()
+    if {_user} is "":
+        reply json "{""error"":""invalid_token""}"
+        reply with status 401
+        stop middleware
+    continue middleware
+
+# Admin nebo moderátor (role v data.jsonc → users.{login}.role).
+define middleware "requireStaff":
+    set {_user} to webResolveUser()
+    if {_user} is "":
+        reply json "{""error"":""invalid_token""}"
+        reply with status 401
+        stop middleware
+    if webIsStaff({_user}) is false:
+        reply json "{""error"":""forbidden""}"
+        reply with status 403
+        stop middleware
+    continue middleware
+
+# ======================== START ========================
+
+on script load:
+    stop jsonic server
+    webDbLoad()
+
+    # Sync hráčů už online při reloadu skriptu
+    loop all players:
+        webTrackPlayer(loop-player)
+
+    webAddActivity("Panel inicializován")
+
+    # SecJsonicServer — deklarace rout (PendingRouteRegistry → flush při start)
+    jsonic server on port {@port} host "0.0.0.0":
+        # enable https on port 18443 cert "certs/server.pem" key "certs/server.key"
+
+        # ======================== AUTH (veřejné) ========================
+        # middleware "json" = vestavěný Content-Type parser (MiddlewareType.JSON)
+
+        group "/api/auth":
+            middleware "json"
+
+            # POST /api/auth/login?username=&password=
+            post "/login":
+                set {_user} to request param "username"
+                set {_pass} to request param "password"
+                if {_user} is not set:
+                    reply json "{""error"":""missing_username""}"
+                    reply with status 400
+                    stop
+                if {_pass} is not set:
+                    reply json "{""error"":""missing_password""}"
+                    reply with status 400
+                    stop
+                if path "users.%{_user}%.pass" of webDb() is not set:
+                    reply json "{""error"":""invalid_credentials""}"
+                    reply with status 401
+                    stop
+                if path "users.%{_user}%.pass" of webDb() is not {_pass}:
+                    reply json "{""error"":""invalid_credentials""}"
+                    reply with status 401
+                    stop
+                set {_token} to random uuid
+                set {_b} to jsonic builder
+                set {_b}'s path "user" to {_user}
+                set path "tokens.%{_token}%" in webDb() to build json from {_b}
+                webDbSave()
+                set {_name} to path "users.%{_user}%.name" of webDb()
+                set {_role} to path "users.%{_user}%.role" of webDb()
+                set {_email} to path "users.%{_user}%.email" of webDb()
+                webAddActivity("Přihlášení: %{_user}%")
+                reply json "{""ok"":true,""token"":""%{_token}%"",""user"":{""username"":""%{_user}%"",""name"":""%{_name}%"",""role"":""%{_role}%"",""email"":""%{_email}%""}}"
+
+            # POST /api/auth/register?username=&password=&name=&email=
+            post "/register":
+                set {_user} to request param "username"
+                set {_pass} to request param "password"
+                set {_name} to request param "name"
+                set {_email} to request param "email"
+                if {_user} is not set:
+                    reply json "{""error"":""missing_username""}"
+                    reply with status 400
+                    stop
+                if {_pass} is not set:
+                    reply json "{""error"":""missing_password""}"
+                    reply with status 400
+                    stop
+                if length of {_pass} < 6:
+                    reply json "{""error"":""password_too_short""}"
+                    reply with status 400
+                    stop
+                if path "users.%{_user}%.pass" of webDb() is set:
+                    reply json "{""error"":""username_taken""}"
+                    reply with status 409
+                    stop
+                if {_name} is not set:
+                    set {_name} to {_user}
+                if {_email} is not set:
+                    set {_email} to "%{_user}%@local"
+                set {_b} to jsonic builder
+                set {_b}'s path "pass" to {_pass}
+                set {_b}'s path "name" to {_name}
+                set {_b}'s path "email" to {_email}
+                set {_b}'s path "role" to "viewer"
+                set path "users.%{_user}%" in webDb() to build json from {_b}
+                set path "userIds[]" in webDb() to {_user}
+                set {_token} to random uuid
+                set {_tb} to jsonic builder
+                set {_tb}'s path "user" to {_user}
+                set path "tokens.%{_token}%" in webDb() to build json from {_tb}
+                webDbSave()
+                webAddActivity("Nová registrace: %{_user}%")
+                reply json "{""ok"":true,""token"":""%{_token}%"",""user"":{""username"":""%{_user}%"",""name"":""%{_name}%"",""role"":""viewer"",""email"":""%{_email}%""}}"
+
+        # ======================== API (chráněné — Bearer) ========================
+        # middleware "auth" = Bearer parser · "requireAuth" = vlastní define výše
+
+        group "/api":
+            middleware "auth"
+            middleware "json"
+            middleware "requireAuth"
+
+            post "/auth/logout":
+                set {_token} to bearer token
+                if {_token} is set:
+                    remove path "tokens.%{_token}%" from webDb()
+                    webDbSave()
+                reply json "{""ok"":true}"
+
+            get "/auth/me":
+                set {_user} to webResolveUser()
+                set {_name} to path "users.%{_user}%.name" of webDb()
+                set {_role} to path "users.%{_user}%.role" of webDb()
+                set {_email} to path "users.%{_user}%.email" of webDb()
+                reply json "{""username"":""%{_user}%"",""name"":""%{_name}%"",""role"":""%{_role}%"",""email"":""%{_email}%""}"
+
+            post "/auth/profile":
+                set {_user} to webResolveUser()
+                if {_user} is "":
+                    reply json "{""error"":""invalid_token""}"
+                    reply with status 401
+                    stop
+                set {_name} to request param "name"
+                set {_email} to request param "email"
+                if {_name} is set:
+                    set path "users.%{_user}%.name" in webDb() to {_name}
+                if {_email} is set:
+                    set path "users.%{_user}%.email" in webDb() to {_email}
+                webDbSave()
+                set {_name} to path "users.%{_user}%.name" of webDb()
+                set {_role} to path "users.%{_user}%.role" of webDb()
+                set {_email} to path "users.%{_user}%.email" of webDb()
+                webAddActivity("Profil upraven: %{_user}%")
+                reply json "{""ok"":true,""user"":{""username"":""%{_user}%"",""name"":""%{_name}%"",""role"":""%{_role}%"",""email"":""%{_email}%""}}"
+
+            post "/auth/password":
+                set {_user} to webResolveUser()
+                if {_user} is "":
+                    reply json "{""error"":""invalid_token""}"
+                    reply with status 401
+                    stop
+                set {_cur} to request param "current"
+                set {_next} to request param "next"
+                if {_cur} is not path "users.%{_user}%.pass" of webDb():
+                    reply json "{""error"":""wrong_password""}"
+                    reply with status 403
+                    stop
+                if {_next} is not set:
+                    reply json "{""error"":""missing_password""}"
+                    reply with status 400
+                    stop
+                if length of {_next} < 6:
+                    reply json "{""error"":""password_too_short""}"
+                    reply with status 400
+                    stop
+                set path "users.%{_user}%.pass" in webDb() to {_next}
+                webDbSave()
+                webAddActivity("Heslo změněno: %{_user}%")
+                reply json "{""ok"":true}"
+
+            # GET /api/dashboard — statistiky pro panel
+            get "/dashboard":
+                set {_online} to number of all players
+                set {_totalPlayers} to webCountIndexed("playerIds")
+                set {_totalHomes} to webHomeCount()
+                set {_totalUsers} to webUserCount()
+                set {_onlineJson} to "["
+                set {_first} to true
+                loop all players:
+                    if {_first} is true:
+                        set {_first} to false
+                    else:
+                        set {_onlineJson} to "%{_onlineJson}%,"
+                    set {_onlineJson} to "%{_onlineJson}%{""name"":""%loop-player%""}"
+                set {_onlineJson} to "%{_onlineJson}%]"
+                set {_actJson} to webJsonActivity()
+                reply json "{""onlinePlayers"":%{_online}%,""totalPlayers"":%{_totalPlayers}%,""totalHomes"":%{_totalHomes}%,""totalUsers"":%{_totalUsers}%,""version"":""Jsonic 1.0"",""online"":%{_onlineJson}%,""activity"":%{_actJson}%}"
+
+            get "/players":
+                set {_json} to webJsonPlayers()
+                reply json "{""players"":%{_json}%}"
+
+            get "/homes":
+                set {_json} to webJsonHomes()
+                reply json "{""homes"":%{_json}%}"
+
+            # POST /api/homes?name=&world=&x=&y=&z=&public=
+            post "/homes":
+                set {_user} to webResolveUser()
+                set {_name} to request param "name"
+                set {_world} to request param "world"
+                set {_x} to request param "x"
+                set {_y} to request param "y"
+                set {_z} to request param "z"
+                set {_pub} to request param "public"
+                if {_name} is not set:
+                    set {_name} to "domov"
+                if {_world} is not set:
+                    reply json "{""error"":""missing_world""}"
+                    reply with status 400
+                    stop
+                if {_x} is not set:
+                    reply json "{""error"":""missing_coords""}"
+                    reply with status 400
+                    stop
+                if {_y} is not set:
+                    reply json "{""error"":""missing_coords""}"
+                    reply with status 400
+                    stop
+                if {_z} is not set:
+                    reply json "{""error"":""missing_coords""}"
+                    reply with status 400
+                    stop
+                set {_id} to webHomeIdFromName({_name})
+                set {_isPublic} to false
+                if {_pub} is "true":
+                    set {_isPublic} to true
+                if {_pub} is "1":
+                    set {_isPublic} to true
+                if webCreateHome({_id}, {_name}, {_user}, {_world}, {_x}, {_y}, {_z}, {_isPublic}) is true:
+                    webAddActivity("Domov vytvořen: %{_id}% (%{_user}%)")
+                    reply json "{""ok"":true,""id"":""%{_id}%""}"
+                else:
+                    reply json "{""error"":""already_exists""}"
+                    reply with status 409
+
+            get "/map":
+                set {_worldJson} to webJsonWorlds()
+                set {_markJson} to webJsonMapMarkers()
+                reply json "{""worlds"":%{_worldJson}%,""markers"":%{_markJson}%}"
+
+            get "/commands":
+                set {_user} to webResolveUser()
+                set {_histJson} to webJsonCmdHistory()
+                set {_canRun} to false
+                if webIsStaff({_user}) is true:
+                    set {_canRun} to true
+                reply json "{""history"":%{_histJson}%,""canRun"":%{_canRun}%}"
+
+            group "/commands":
+                middleware "requireStaff"
+                post "/run":
+                    set {_user} to webResolveUser()
+                    set {_cmd} to request param "cmd"
+                    if {_cmd} is not set:
+                        reply json "{""error"":""missing_cmd""}"
+                        reply with status 400
+                        stop
+                    if {_cmd} is "":
+                        reply json "{""error"":""empty_cmd""}"
+                        reply with status 400
+                        stop
+                    if length of {_cmd} > 256:
+                        reply json "{""error"":""cmd_too_long""}"
+                        reply with status 400
+                        stop
+                    execute console command {_cmd}
+                    webAddCmdLog({_user}, {_cmd})
+                    webAddActivity("Konsole: %{_cmd}% (%{_user}%)")
+                    reply json "{""ok"":true,""cmd"":""%{_cmd}%""}"
+
+            group "/homes":
+                middleware "requireStaff"
+                delete "/{id}":
+                    set {_user} to webResolveUser()
+                    set {_id} to route param "id"
+                    if webDeleteHome({_id}) is true:
+                        webAddActivity("Domov smazán: %{_id}% (%{_user}%)")
+                        reply json "{""ok"":true,""deleted"":""%{_id}%""}"
+                    else:
+                        reply json "{""error"":""not_found""}"
+                        reply with status 404
+
+        # ======================== STATICKÝ WEB ========================
+        # Soubory z plugins/Jsonic/ (syncRunServerWeb → admin/, errors/)
+
+        get "/":
+            reply file "admin/index.html"
+
+        get "/admin":
+            reply file "admin/index.html"
+
+        serve files from "admin/assets" at "/admin/assets/"
+        serve files from "admin" at "/admin/"
+
+        # SecJsonicError — vlastní error stránky
+        error "404":
+            reply file "errors/404.html" with status 404
+
+        error "500":
+            reply file "errors/500.html" with status 500
+
+    # EffStartServer — zaregistruje pending routy a naslouchá na portu
+    start jsonic server
+    log "[server.sk] Admin panel běží na portu {@port} — http://127.0.0.1:{@port}/"
+
+on script unload:
+    stop jsonic server
+
+# ======================== PŘÍKAZ ========================
+
+command /jsonicserver [<text>] [<text>]:
+    trigger:
+        if arg-1 is not set:
+            send "&e/jsonicserver start&7 | &estop&7 | &eroutes&7 | &etest [název]"
+            stop
+        if arg-1 is "routes":
+            send "&6Jsonic Admin (&f{@port}&6):"
+            send "&7GET  /  &7→ admin panel"
+            send "&7POST /api/auth/login"
+            send "&7POST /api/auth/register"
+            send "&7GET  /api/dashboard  &7(Bearer)"
+            send "&7GET  /api/players  &7(Bearer)"
+            send "&7GET  /api/homes  &7(Bearer)"
+            send "&7POST /api/homes  &7(Bearer, souřadnice)"
+            send "&7GET  /api/map  &7(Bearer)"
+            send "&7GET  /api/commands  &7(Bearer)"
+            send "&7POST /api/commands/run  &7(admin/mod)"
+            send "&7DELETE /api/homes/{id}  &7(admin/mod)"
+            stop
+        if arg-1 is "start":
+            start jsonic server
+            send "&aJsonic server běží na portu &f{@port}&a."
+            send "&7Admin panel: &fhttp://127.0.0.1:{@port}/"
+            send "&7Z Windows: &fhttp://<wsl-ip>:{@port}/ &7(wsl hostname -I)"
+            stop
+        if arg-1 is "stop":
+            stop jsonic server
+            send "&cJsonic server zastaven."
+            stop
+        if arg-1 is "test":
+            set {_case} to arg-2
+            if {_case} is not set:
+                set {_case} to "dashboard"
+            set {_url} to "http://127.0.0.1:{@port}/"
+            if {_case} is "login":
+                set {_url} to "http://127.0.0.1:{@port}/api/auth/login?username=admin&password=admin123"
+            else if {_case} is "players":
+                set {_url} to "http://127.0.0.1:{@port}/api/players"
+            if {_case} is "login":
+                set {_req} to prepare POST request on {_url}
+            else:
+                set {_req} to prepare GET request on {_url}
+            execute {_req}
+            wait 5 ticks
+            set {_res} to last response of {_req}
+            if {_res} is not set:
+                send "&cŽádná odpověď — nejdřív &f/jsonicserver start"
+                stop
+            send "&7test=&f%{_case}% &7→ &f%{_url}%"
+            send "&7status: &f%status code of {_res}%"
+            send "&7body: &f%body of {_res}%"
+            stop
+        send "&cNeznámý příkaz. Použij: start, stop, routes, test [název]"

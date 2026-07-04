@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="dark">
+    <title>Server panel</title>
+    <link rel="stylesheet" href="/admin/assets/styles.css">
+</head>
+<body>
+    <div id="view-auth" class="view view--active">
+        <div class="auth-box">
+            <header class="auth-head">
+                <div class="logo">⛏</div>
+                <h1>Server panel</h1>
+                <p class="muted">Přihlášení pro správu MC serveru</p>
+            </header>
+
+            <div class="auth-tabs">
+                <button type="button" class="auth-tab auth-tab--active" data-auth-tab="login">Přihlásit</button>
+                <button type="button" class="auth-tab" data-auth-tab="register">Účet</button>
+            </div>
+
+            <form id="form-login" class="auth-form auth-form--active">
+                <label class="field">
+                    <span>Jméno</span>
+                    <input name="username" type="text" required autocomplete="username" placeholder="admin">
+                </label>
+                <label class="field">
+                    <span>Heslo</span>
+                    <input name="password" type="password" required autocomplete="current-password">
+                </label>
+                <button type="submit" class="btn btn--primary btn--full">Vstoupit</button>
+                <p class="auth-note">Výchozí účet: admin / admin123 (viz web/data.jsonc)</p>
+            </form>
+
+            <form id="form-register" class="auth-form">
+                <label class="field">
+                    <span>Přezdívka</span>
+                    <input name="name" type="text" required placeholder="Steve">
+                </label>
+                <label class="field">
+                    <span>E-mail</span>
+                    <input name="email" type="email" required>
+                </label>
+                <label class="field">
+                    <span>Login</span>
+                    <input name="username" type="text" required autocomplete="username">
+                </label>
+                <label class="field">
+                    <span>Heslo</span>
+                    <input name="password" type="password" required minlength="6" autocomplete="new-password">
+                </label>
+                <button type="submit" class="btn btn--primary btn--full">Registrovat</button>
+            </form>
+
+            <div id="auth-error" class="banner banner--error" hidden></div>
+        </div>
+    </div>
+
+    <div id="view-app" class="view">
+        <aside class="sidebar">
+            <div class="sidebar-head">
+                <span class="logo logo--sm">⛏</span>
+                <div>
+                    <strong>Server panel</strong>
+                    <small id="sidebar-port">:18102</small>
+                </div>
+            </div>
+
+            <nav class="sidebar-nav">
+                <button type="button" class="nav-item nav-item--active" data-page="dashboard">Přehled</button>
+                <button type="button" class="nav-item" data-page="map">Mapa</button>
+                <button type="button" class="nav-item" data-page="players">Hráči</button>
+                <button type="button" class="nav-item" data-page="homes">Domovy</button>
+                <button type="button" class="nav-item" data-page="console">Konsole</button>
+                <button type="button" class="nav-item" data-page="settings">Účet</button>
+            </nav>
+
+            <footer class="sidebar-foot">
+                <div class="user-line">
+                    <span class="user-dot" id="user-avatar">?</span>
+                    <div>
+                        <strong id="user-name">—</strong>
+                        <span id="user-role" class="tag">—</span>
+                    </div>
+                </div>
+                <button type="button" id="btn-logout" class="btn btn--ghost btn--sm btn--full">Odhlásit</button>
+            </footer>
+        </aside>
+
+        <main class="main">
+            <header class="topbar">
+                <div>
+                    <h2 id="page-title">Přehled</h2>
+                    <p id="page-subtitle" class="muted"></p>
+                </div>
+                <div class="topbar-right">
+                    <span class="tag tag--ok" id="server-status">online</span>
+                    <button type="button" id="btn-refresh" class="btn btn--secondary btn--sm">Obnovit</button>
+                </div>
+            </header>
+
+            <section id="page-dashboard" class="page page--active">
+                <div class="stats" id="stats-grid"></div>
+                <div class="split">
+                    <div class="box">
+                        <h3>Online</h3>
+                        <ul class="list" id="online-list"></ul>
+                    </div>
+                    <div class="box">
+                        <h3>Log</h3>
+                        <ul class="list list--log" id="activity-list"></ul>
+                    </div>
+                </div>
+            </section>
+
+            <section id="page-map" class="page">
+                <div class="map-bar">
+                    <label>
+                        Svět
+                        <select id="map-world" class="select"></select>
+                    </label>
+                    <label class="map-check">
+                        <input type="checkbox" id="map-show-homes" checked> domovy
+                    </label>
+                    <label class="map-check">
+                        <input type="checkbox" id="map-show-players" checked> hráči
+                    </label>
+                    <span class="muted" id="map-hint">Klik = souřadnice</span>
+                </div>
+                <div class="map-wrap">
+                    <canvas id="map-canvas" width="960" height="520"></canvas>
+                    <div id="map-tooltip" class="map-tip" hidden></div>
+                </div>
+            </section>
+
+            <section id="page-players" class="page">
+                <div class="toolbar">
+                    <input type="search" id="players-search" class="input" placeholder="Hledat…">
+                    <select id="players-filter" class="select">
+                        <option value="all">všichni</option>
+                        <option value="online">online</option>
+                        <option value="offline">offline</option>
+                    </select>
+                </div>
+                <div class="table-scroll">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Hráč</th>
+                                <th>Stav</th>
+                                <th>Čas</th>
+                                <th>Naposledy</th>
+                                <th>Role</th>
+                            </tr>
+                        </thead>
+                        <tbody id="players-tbody"></tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section id="page-homes" class="page">
+                <div class="toolbar">
+                    <input type="search" id="homes-search" class="input" placeholder="Domov, svět, vlastník…">
+                </div>
+                <div class="cards" id="homes-grid"></div>
+            </section>
+
+            <section id="page-console" class="page">
+                <div class="console-layout">
+                    <div class="box box--console">
+                        <h3>Příkaz</h3>
+                        <form id="form-console" class="console-form">
+                            <span class="console-prompt">&gt;</span>
+                            <input id="console-input" class="console-input" type="text" placeholder="list" autocomplete="off" spellcheck="false">
+                            <button type="submit" class="btn btn--primary btn--sm">Odeslat</button>
+                        </form>
+                        <p id="console-hint" class="muted console-hint">Jen admin / moderátor může spouštět příkazy konzole.</p>
+                        <div class="quick-cmds" id="quick-cmds">
+                            <button type="button" class="btn btn--ghost btn--sm" data-cmd="list">list</button>
+                            <button type="button" class="btn btn--ghost btn--sm" data-cmd="time set day">den</button>
+                            <button type="button" class="btn btn--ghost btn--sm" data-cmd="weather clear">slunečno</button>
+                            <button type="button" class="btn btn--ghost btn--sm" data-cmd="save-all">save-all</button>
+                        </div>
+                    </div>
+                    <div class="box">
+                        <h3>Historie</h3>
+                        <ul class="list list--log" id="cmd-history"></ul>
+                    </div>
+                </div>
+            </section>
+
+            <section id="page-settings" class="page">
+                <div class="split">
+                    <div class="box">
+                        <h3>Profil</h3>
+                        <form id="form-profile" class="stack">
+                            <label class="field">
+                                <span>Jméno</span>
+                                <input name="name" type="text" required>
+                            </label>
+                            <label class="field">
+                                <span>E-mail</span>
+                                <input name="email" type="email" required>
+                            </label>
+                            <button type="submit" class="btn btn--primary">Uložit</button>
+                        </form>
+                    </div>
+                    <div class="box">
+                        <h3>Heslo</h3>
+                        <form id="form-password" class="stack">
+                            <label class="field">
+                                <span>Staré</span>
+                                <input name="current" type="password" required autocomplete="current-password">
+                            </label>
+                            <label class="field">
+                                <span>Nové</span>
+                                <input name="next" type="password" required minlength="6" autocomplete="new-password">
+                            </label>
+                            <button type="submit" class="btn btn--secondary">Změnit</button>
+                        </form>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <div id="toast-root" class="toasts"></div>
+    <script type="module" src="/admin/assets/app.js"></script>
+</body>
+</html>

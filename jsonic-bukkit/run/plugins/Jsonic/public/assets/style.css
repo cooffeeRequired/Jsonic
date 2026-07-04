@@ -1,0 +1,39 @@
+body {
+    font-family: system-ui, sans-serif;
+    background: #0f172a;
+    color: #e2e8f0;
+    margin: 0;
+    min-height: 100vh;
+    display: grid;
+    place-items: center;
+}
+
+.card {
+    background: #1e293b;
+    border-radius: 12px;
+    padding: 2rem;
+    width: min(480px, 90vw);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+}
+
+h1 {
+    margin-top: 0;
+    color: #7f5af0;
+}
+
+button {
+    background: #2cb67d;
+    color: #04261a;
+    border: 0;
+    border-radius: 8px;
+    padding: 0.6rem 1rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+pre {
+    background: #0b1220;
+    padding: 1rem;
+    border-radius: 8px;
+    overflow: auto;
+}
